@@ -1,0 +1,82 @@
+trigger:
+  branches:
+    include:
+      - main
+
+pool:
+  vmImage: 'windows-latest'
+
+variables:
+  - name: buildConfiguration
+    value: Release
+  - name: artifact
+    value: sql_scripts
+  - name: dbContext
+    value: ApplicationDbContext
+  - name: scriptsProject
+    value: 'src/Database.Scripts'  
+  - name: dbContextProject
+    value: 'src/Database.Context/Database.Context.csproj'
+  - group: 'DbVariableGroup'
+  - name: 'ConnectionString:SqlServer'
+    value: $[variables.DefaultConnectionString]
+
+steps:
+  - checkout: self
+    displayName: "Checkout Repo"
+
+  - task: UseDotNet@2
+    displayName: 'Use .NET Core sdk 3.1'
+    inputs:
+      version: '3.1.x'
+
+  - task: DotNetCoreCLI@2
+    displayName: "Add DotNet tools Manifest"
+    inputs:
+      command: 'custom'
+      custom: 'new'
+      arguments: 'tool-manifest'
+      
+  - task: DotNetCoreCLI@2
+    displayName: "Install EFCore Tools"
+    inputs:
+      command: 'custom'
+      custom: 'tool'
+      arguments: 'install dotnet-ef'
+      
+  - task: PowerShell@2
+    displayName: 'Retrieve Last MigrationId'
+    inputs:
+      targetType: 'inline'
+      script: |
+        Install-Module -Name SqlServer
+      
+        $Query = "SELECT TOP 1 MigrationId FROM [dbo].[__EFMigrationsHistory] ORDER BY MigrationId DESC"
+      
+        $MigrationId = (Invoke-SqlCmd -ConnectionString $env:CONNECTIONSTRING:SQLSERVER -query $Query -querytimeout 6000)['MigrationId']
+      
+        Write-Host "Last migration: $MigrationId"
+        
+        Write-Host "##vso[task.setvariable variable=lastMigration]$MigrationId"
+
+  - task: CopyFiles@2
+    displayName: "Copy Scripts"
+    inputs:
+      sourceFolder: '$(scriptsProject)'
+      Contents: '**/*.sql'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)/scripts'
+      flattenFolders: true
+
+  - task: DotNetCoreCLI@2
+    displayName: "Generate Migrations Scripts"
+    inputs:
+      command: 'custom'
+      custom: 'ef'
+      arguments: 'migrations script $(lastMigration) --output $(Build.ArtifactStagingDirectory)/schema/migrations.sql --project $(dbContextProject) --context $(dbContext) --idempotent'
+
+  - task: PublishPipelineArtifact@1
+    displayName: "Publish Artifact"
+    inputs:
+      targetPath: "$(Build.ArtifactStagingDirectory)"
+      artifact: "$(artifact)"
+      publishLocation: "pipeline"
