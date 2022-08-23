@@ -45,13 +45,13 @@ steps:
       arguments: 'install dotnet-ef'
       
   - task: PowerShell@2
-    displayName: 'Retrieve Last MigrationId'
+    displayName: 'Retrieve Last MigrationId from Last 30 Migrations Batch'
     inputs:
       targetType: 'inline'
       script: |
         Install-Module -Name SqlServer
       
-        $Query = "SELECT TOP 1 MigrationId FROM [dbo].[__EFMigrationsHistory] ORDER BY MigrationId DESC"
+        $Query = "SELECT TOP 1 T.MigrationId FROM (SELECT TOP 30 MigrationId FROM [dbo].[__EFMigrationsHistory] ORDER BY MigrationId DESC) T ORDER BY MigrationId ASC"
       
         $MigrationId = (Invoke-SqlCmd -ConnectionString $env:CONNECTIONSTRING:SQLSERVER -query $Query -querytimeout 6000)['MigrationId']
       
