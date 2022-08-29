@@ -49,7 +49,7 @@ steps:
     inputs:
       targetType: 'inline'
       script: |
-        Install-Module -Name SqlServer
+        Install-Module -Name SqlServer -Force
       
         $Query = "SELECT TOP 1 T.MigrationId FROM (SELECT TOP 30 MigrationId FROM [dbo].[__EFMigrationsHistory] ORDER BY MigrationId DESC) T ORDER BY MigrationId ASC"
       
